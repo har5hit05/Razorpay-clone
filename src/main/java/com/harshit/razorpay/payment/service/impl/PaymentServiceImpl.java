@@ -44,7 +44,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         if(order.getOrderStatus() != OrderStatus.CREATED && order.getOrderStatus() != OrderStatus.ATTEMPTED){
             throw new BusinessRuleViolatationException("ORDER_NOT_PAYABLE",
-                    "Order cannot accept patment in status: " + order.getOrderStatus());
+                    "Order cannot accept payment in status: " + order.getOrderStatus());
         }
 
         order.setOrderStatus(OrderStatus.ATTEMPTED);
@@ -56,6 +56,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .amount(order.getAmount())
                 .status(PaymentStatus.CREATED)
                 .method(request.method())
+                .idempotencyKey(UUID.randomUUID().toString())
                 .methodDetails(request.methodDetails())
                 .build();
 
