@@ -3,6 +3,7 @@ package com.harshit.razorpay.merchant.service.impl;
 import ch.qos.logback.core.testUtil.RandomUtil;
 import com.harshit.razorpay.common.exception.ResourceNotFoundException;
 import com.harshit.razorpay.common.util.RandomizerUtil;
+import com.harshit.razorpay.merchant.cache.ApiKeyCache;
 import com.harshit.razorpay.merchant.dto.request.CreateApiKeyRequest;
 import com.harshit.razorpay.merchant.dto.response.ApiKeyCreateResponse;
 import com.harshit.razorpay.merchant.dto.response.ApiKeyResponse;
@@ -32,6 +33,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     private final ApiKeyRepository apiKeyRepository;
     private final ApiKeyMapper apiKeyMapper;
     private final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
+    private final ApiKeyCache apiKeyCache;
 
     @Override
     @Transactional
@@ -77,6 +79,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
                 .orElseThrow(() -> new ResourceNotFoundException("ApiKey", keyId));
 
         key.setEnabled(false);
+        apiKeyCache.evict(key.getKeyId());
 //        apiKeyRepository.save(key);
     }
 
@@ -96,6 +99,8 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         apiKey.setGracePeriodExpiresAt(LocalDateTime.now().plusHours(24));
 
         apiKey = apiKeyRepository.save(apiKey);
+
+        apiKeyCache.evict(apiKey.getKeyId());
 
         return new ApiKeyCreateResponse(apiKey.getId(), apiKey.getKeyId(), newRawSecret, apiKey.getEnvironment());      //could not use mapstruct as rawsecret is being passed here
     }

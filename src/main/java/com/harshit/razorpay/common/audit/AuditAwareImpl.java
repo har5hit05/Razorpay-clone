@@ -6,6 +6,7 @@ import org.springframework.data.domain.AuditorAware;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -20,7 +21,9 @@ public class AuditAwareImpl implements AuditorAware<String> {
             String keyId = merchantContext.getKeyId();
             if(keyId != null && !keyId.isBlank()) return Optional.of(keyId);
 
-            if(merchantContext.getMerchantId() != null){
+            UUID merchantId = merchantContext.getMerchantId();
+
+            if(merchantId != null){
                 return Optional.of("merchant_id " + merchantContext.getMerchantId());
             }
 
