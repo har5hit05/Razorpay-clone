@@ -25,6 +25,9 @@ public class OrderController {
 
     @PostMapping
     public ResponseEntity<OrderResponse> create(@RequestBody @Valid CreateOrderRequest request){
+
+        System.out.println("========== CREATE API KEY CONTROLLER CALLED ==========");
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(orderService.create(merchantContext.getMerchantId(), request));
     }
