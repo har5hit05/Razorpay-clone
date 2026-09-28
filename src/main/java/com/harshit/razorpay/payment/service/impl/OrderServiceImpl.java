@@ -4,11 +4,13 @@ import com.harshit.razorpay.common.enums.OrderStatus;
 import com.harshit.razorpay.common.exception.BusinessRuleViolatationException;
 import com.harshit.razorpay.common.exception.DuplicateResourceException;
 import com.harshit.razorpay.common.exception.ResourceNotFoundException;
+import com.harshit.razorpay.merchant.service.CustomerService;
 import com.harshit.razorpay.payment.dto.request.CreateOrderRequest;
 import com.harshit.razorpay.payment.dto.response.OrderResponse;
 import com.harshit.razorpay.payment.dto.response.PaymentResponse;
 import com.harshit.razorpay.payment.entity.OrderRecord;
 import com.harshit.razorpay.payment.entity.Payment;
+import com.harshit.razorpay.payment.mapper.OrderMapper;
 import com.harshit.razorpay.payment.mapper.PaymentMapper;
 import com.harshit.razorpay.payment.repository.OrderRepository;
 import com.harshit.razorpay.payment.repository.PaymentRepository;
@@ -33,6 +35,8 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
+    private final OrderMapper orderMapper;
+    private final CustomerService customerService;
 
     @Value("${payment.order.default-order-expiry-minutes:30}")
     private int defaultOrderExpiryMinutes;
@@ -44,12 +48,22 @@ public class OrderServiceImpl implements OrderService {
             throw new DuplicateResourceException("ORDER_RECEIPT_DUPLICATE", "Order with receipt already exists: " + request.receipt());
         }
 
+        UUID customerId = null;
+        if(request.customer() != null){
+            customerId = customerService.findOrCreate(merchantId,
+                    request.customer().email(),
+                    request.customer().name(),
+                    request.customer().phone()
+                    );
+        }
+
         OrderRecord order = OrderRecord.builder()
                 .receipt(request.receipt())
                 .amount(request.amount())
                 .notes(request.notes())
 
                 .merchantId(merchantId)
+                .customerId(customerId)
                 .orderStatus(OrderStatus.CREATED)
                 .expiresAt(request.expiresAt() != null ? request.expiresAt() :
                         LocalDateTime.now().plusHours(defaultOrderExpiryMinutes))
@@ -59,14 +73,16 @@ public class OrderServiceImpl implements OrderService {
 
         //TODO: publish kafka event about order creation
 
-        return new OrderResponse(order.getId(),
-                order.getMerchantId(),
-                order.getReceipt(),
-                order.getAmount(),
-                order.getOrderStatus(),
-                order.getAttempts(),
-                order.getNotes(), order.getExpiresAt(),
-        null);
+        return orderMapper.toResponse(order);
+
+//        return new OrderResponse(order.getId(),
+//                order.getMerchantId(),
+//                order.getReceipt(),
+//                order.getAmount(),
+//                order.getOrderStatus(),
+//                order.getAttempts(),
+//                order.getNotes(), order.getExpiresAt(),
+//        null);
     }
 
     @Override
@@ -74,15 +90,17 @@ public class OrderServiceImpl implements OrderService {
         OrderRecord order = orderRepository.findByIdAndMerchantId(orderId, merchantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
 
-        return new OrderResponse(order.getId(),
-                order.getMerchantId(),
-                order.getReceipt(),
-                order.getAmount(),
-                order.getOrderStatus(),
-                order.getAttempts(),
-                order.getNotes(),
-                order.getExpiresAt(),
-                null);
+        return orderMapper.toResponse(order);
+
+//        return new OrderResponse(order.getId(),
+//                order.getMerchantId(),
+//                order.getReceipt(),
+//                order.getAmount(),
+//                order.getOrderStatus(),
+//                order.getAttempts(),
+//                order.getNotes(),
+//                order.getExpiresAt(),
+//                null);
     }
 
     @Override
@@ -99,15 +117,17 @@ public class OrderServiceImpl implements OrderService {
         order.setOrderStatus(OrderStatus.CANCELLED);
         order = orderRepository.save(order);
 
-        return new OrderResponse(order.getId(),
-                order.getMerchantId(),
-                order.getReceipt(),
-                order.getAmount(),
-                order.getOrderStatus(),
-                order.getAttempts(),
-                order.getNotes(),
-                order.getExpiresAt(),
-                null);
+        return orderMapper.toResponse(order);
+
+//        return new OrderResponse(order.getId(),
+//                order.getMerchantId(),
+//                order.getReceipt(),
+//                order.getAmount(),
+//                order.getOrderStatus(),
+//                order.getAttempts(),
+//                order.getNotes(),
+//                order.getExpiresAt(),
+//                null);
     }
 
     @Override
