@@ -1,5 +1,6 @@
 package com.harshit.razorpay.payment.service.impl;
 
+import com.harshit.razorpay.common.enums.EventAggregateType;
 import com.harshit.razorpay.common.enums.OrderStatus;
 import com.harshit.razorpay.common.enums.PaymentEvent;
 import com.harshit.razorpay.common.enums.PaymentStatus;
@@ -13,6 +14,7 @@ import com.harshit.razorpay.payment.gateway.PaymentGatewayRouter;
 import com.harshit.razorpay.payment.gateway.dto.PaymentRequest;
 import com.harshit.razorpay.payment.gateway.dto.PaymentResult;
 import com.harshit.razorpay.payment.mapper.PaymentMapper;
+import com.harshit.razorpay.payment.outbox.OutboxEventPublisher;
 import com.harshit.razorpay.payment.repository.OrderRepository;
 import com.harshit.razorpay.payment.repository.PaymentRepository;
 import com.harshit.razorpay.payment.service.PaymentService;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -36,6 +39,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentGatewayRouter paymentGatewayRouter;
     private final PaymentMapper paymentMapper;
     private final PaymentTransitionService paymentTransitionService;
+    private final OutboxEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -91,7 +95,17 @@ public class PaymentServiceImpl implements PaymentService {
         payment = paymentRepository.save(payment);
         orderRepository.save(order);
 
-        //TODO: send outbox (kafka event)
+        //DONE: send outbox (kafka event)
+        eventPublisher.publish(EventAggregateType.PAYMENT, payment.getId(), "PAYMENT_CREATED",
+                Map.of("orderId", order.getId().toString(),
+                        "paymentId", payment.getId().toString(),
+                        "merchantId", merchantId.toString(),
+                        "paymentStatus", payment.getStatus().name(),
+                        "amountUnits", order.getAmount().getAmountUnits(),
+                        "amountCurrency", order.getAmount().getCurrency(),
+                        "paymentMethod", payment.getMethod()
+                )
+        );
 
         return paymentMapper.toResponse(payment);
     }
@@ -126,7 +140,17 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment = paymentRepository.save(payment);
 
-        //TODO: send outbox (kafka event)
+        //DONE: send outbox (kafka event)
+        eventPublisher.publish(EventAggregateType.PAYMENT, payment.getId(), "PAYMENT_STATUS_CHANGED",
+                Map.of("orderId", payment.getOrder().getId().toString(),
+                        "paymentId", payment.getId().toString(),
+                        "merchantId", merchantId.toString(),
+                        "paymentStatus", payment.getStatus().name(),
+                        "amountUnits", payment.getAmount().getAmountUnits(),
+                        "amountCurrency", payment.getAmount().getCurrency(),
+                        "paymentMethod", payment.getMethod()
+                )
+        );
 
         return paymentMapper.toResponse(payment);
     }
@@ -174,6 +198,16 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
         orderRepository.save(orderRecord);
 
-        //TODO: send outbox (kafka event)
+        //DONE: send outbox (kafka event)
+        eventPublisher.publish(EventAggregateType.PAYMENT, payment.getId(), "PAYMENT_STATUS_CHANGED",
+                Map.of("orderId", payment.getOrder().getId().toString(),
+                        "paymentId", payment.getId().toString(),
+                        "merchantId", payment.getMerchantId().toString(),
+                        "paymentStatus", payment.getStatus().name(),
+                        "amountUnits", payment.getAmount().getAmountUnits(),
+                        "amountCurrency", payment.getAmount().getCurrency(),
+                        "paymentMethod", payment.getMethod()
+                )
+        );
     }
 }

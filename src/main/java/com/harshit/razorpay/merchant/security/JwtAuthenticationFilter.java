@@ -34,12 +34,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try{
             final String authorizationHeader = request.getHeader("Authorization");
-            if(authorizationHeader == null || !authorizationHeader.startsWith("Bearer")){
+            if(authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")){
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            String jwtToken = authorizationHeader.substring("Bearer".length());
+            String jwtToken = authorizationHeader.substring("Bearer ".length());
 
             Claims claims = jwtUtil.verifyAccessToken(jwtToken);
 

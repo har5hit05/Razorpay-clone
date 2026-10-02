@@ -142,6 +142,6 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         int colon = decoded.indexOf(":");
         if(colon < 1) return null;
 
-        return new String[]{decoded.substring(0, colon), decoded.substring(colon)};
+        return new String[]{decoded.substring(0, colon), decoded.substring(colon+1)};
     }
 }
