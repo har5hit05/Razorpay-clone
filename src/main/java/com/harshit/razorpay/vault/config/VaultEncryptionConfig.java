@@ -22,11 +22,11 @@ public class VaultEncryptionConfig {
                 AesBytesEncryptor.CipherAlgorithm.GCM);
     }
 
-    @Bean
-    public BytesEncryptor dekEncryptor(){
-        byte[] masterKeyBytes = Base64.getDecoder().decode(masterKey);
-        SecretKeySpec masterDecKey = new SecretKeySpec(masterKeyBytes, "AES");
-        return new AesBytesEncryptor(masterDecKey, KeyGenerators.secureRandom(32),
-                AesBytesEncryptor.CipherAlgorithm.GCM);
-    }
+//    @Bean
+//    public BytesEncryptor dekEncryptor(){
+//        byte[] masterKeyBytes = Base64.getDecoder().decode(masterKey);
+//        SecretKeySpec masterDecKey = new SecretKeySpec(masterKeyBytes, "AES");
+//        return new AesBytesEncryptor(masterDecKey, KeyGenerators.secureRandom(32),
+//                AesBytesEncryptor.CipherAlgorithm.GCM);
+//    }
 }
