@@ -18,7 +18,7 @@ public class Money {
 //        this.currency = currency;
 //    }
 
-    public Money of(int amountUnits, String currency){
+    public static Money of(int amountUnits, String currency){
         return new Money(amountUnits, currency);
     }
 

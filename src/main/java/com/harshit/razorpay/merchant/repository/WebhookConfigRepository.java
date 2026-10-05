@@ -3,8 +3,6 @@ package com.harshit.razorpay.merchant.repository;
 import com.harshit.razorpay.merchant.entity.MerchantWebhookConfig;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.lang.ScopedValue;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

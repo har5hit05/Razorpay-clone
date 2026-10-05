@@ -2,10 +2,8 @@ package com.harshit.razorpay.merchant.service.impl;
 
 import com.harshit.razorpay.common.exception.ResourceNotFoundException;
 import com.harshit.razorpay.common.util.RandomizerUtil;
-import com.harshit.razorpay.merchant.api.MerchantWebhookApi;
 import com.harshit.razorpay.merchant.dto.request.UpdateWebhookConfigRequest;
 import com.harshit.razorpay.merchant.dto.response.WebhookConfigResponse;
-import com.harshit.razorpay.common.dto.WebhookTarget;
 import com.harshit.razorpay.merchant.entity.Merchant;
 import com.harshit.razorpay.merchant.entity.MerchantWebhookConfig;
 import com.harshit.razorpay.merchant.mapper.WebhookConfigMapper;
@@ -16,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.encrypt.BytesEncryptor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -25,7 +24,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class WebhookConfigServiceImpl implements WebhookConfigService, MerchantWebhookApi {
+public class WebhookConfigServiceImpl implements WebhookConfigService {
 
     private final MerchantRepository merchantRepository;
     private final WebhookConfigRepository merchantWebhookConfigRepository;
@@ -69,6 +68,7 @@ public class WebhookConfigServiceImpl implements WebhookConfigService, MerchantW
     }
 
     @Override
+    @Transactional
     public WebhookConfigResponse update(UUID merchantId, UUID configId, UpdateWebhookConfigRequest request) {
         MerchantWebhookConfig config = requireOwnedConfig(merchantId, configId);
         config.setTargetUrl(request.targetURL());
@@ -87,17 +87,5 @@ public class WebhookConfigServiceImpl implements WebhookConfigService, MerchantW
     private MerchantWebhookConfig requireOwnedConfig(UUID merchantId, UUID configId) {
         return merchantWebhookConfigRepository.findByIdAndMerchant_Id(configId, merchantId)
                 .orElseThrow(() -> new ResourceNotFoundException("MerchantWebhookConfig", configId));
-    }
-
-    @Override
-    public List<WebhookTarget> getActiveConfigForEvent(UUID merchantId, String eventType) {
-        return merchantWebhookConfigRepository.findByMerchant_IdAndEnabledTrue(merchantId)
-                .stream()
-                .filter(config -> config.isSubscribedTo(eventType))
-                .map(config -> {
-                    byte[] decryptedSecretBytes = bytesEncryptor.decrypt(config.getWebhookSecret().getBytes(StandardCharsets.UTF_8));
-                    return new WebhookTarget(config.getId(), config.getTargetUrl(), new String(decryptedSecretBytes, StandardCharsets.UTF_8));
-                })
-                .toList();
     }
 }
