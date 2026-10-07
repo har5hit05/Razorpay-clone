@@ -1,18 +1,30 @@
 package com.harshit.razorpay.operations.settlement;
 
+import com.harshit.razorpay.common.dto.SettlementBankDetails;
 import com.harshit.razorpay.common.entity.Money;
+import com.harshit.razorpay.common.enums.EventAggregateType;
 import com.harshit.razorpay.common.enums.SettlementStatus;
+import com.harshit.razorpay.common.exception.ResourceNotFoundException;
+import com.harshit.razorpay.merchant.api.MerchantLookupService;
 import com.harshit.razorpay.operations.entity.Settlement;
+import com.harshit.razorpay.operations.entity.SettlementPayment;
+import com.harshit.razorpay.operations.entity.SettlementPaymentId;
+import com.harshit.razorpay.operations.repository.SettlementPaymentRepository;
 import com.harshit.razorpay.operations.repository.SettlementRepository;
+import com.harshit.razorpay.operations.settlement.dto.BankTransferResult;
 import com.harshit.razorpay.payment.api.PaymentLookupService;
 import com.harshit.razorpay.payment.entity.Payment;
+import com.harshit.razorpay.payment.outbox.OutboxEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -25,12 +37,19 @@ public class SettlementTransactionExecutor {
 
     private final PaymentLookupService paymentLookupService;
     private final SettlementRepository settlementRepository;
+    private final SettlementPaymentRepository settlementPaymentRepository;
+    private final MerchantLookupService merchantLookupService;
+    private final BankTransferProcessor bankTransferProcessor;
+    //TODO: publisher inside it's own DB
+    private final OutboxEventPublisher outboxEventPublisher;
 
     @Transactional
     public void processForMerchant(UUID merchantId, LocalDate settlementDate){
 
         List<Payment> unsettledPayments = paymentLookupService.findUnsettledCapturedPayments(merchantId);
         if(unsettledPayments.isEmpty()) return;
+
+        log.info("Processing {} unsettled payments for merchantId: {} on {} date", unsettledPayments.size(), merchantId, settlementDate);
 
         Money gross = unsettledPayments.stream()
                 .map(Payment::getAmount)
@@ -41,7 +60,7 @@ public class SettlementTransactionExecutor {
         int gst = Math.toIntExact(Math.round(fee * GST_RATE));
         Money feeAmount = Money.of(fee, gross.getCurrency());
         Money gstAmount = Money.of(gst, gross.getCurrency());
-        Money netAmount = gross.subtract(feeAmount.subtract(gstAmount));
+        Money netAmount = gross.subtract(feeAmount).subtract(gstAmount);
 
         Settlement settlement = Settlement.builder()
                 .merchantId(merchantId)
@@ -53,5 +72,71 @@ public class SettlementTransactionExecutor {
                 .build();
 
         settlementRepository.save(settlement);
+
+        try {
+            List<SettlementPayment> links = new ArrayList<>();
+            for (Payment p : unsettledPayments) {
+                links.add(SettlementPayment.builder()
+                        .id(new SettlementPaymentId(settlement.getId(), p.getId()))
+                        .settlement(settlement)
+                        .build());
+            }
+
+            settlementPaymentRepository.saveAll(links);
+
+            SettlementBankDetails settlementBankDetails = merchantLookupService.getSettlementBankDetails(merchantId);
+            //call the bank transfer service to transfer to merchant settlement bank details
+            BankTransferResult bankTransferResult = bankTransferProcessor.initiate(settlement.getId(), merchantId, netAmount, settlementBankDetails.accountNumber(), settlementBankDetails.ifsc());
+
+            settlement.setStatus(SettlementStatus.TRANSFER_PENDING);
+            settlement.setBankReference(bankTransferResult.registrationRef());
+
+            settlementRepository.save(settlement);
+        } catch (Exception e) {
+            log.error("Settlement failed for settlementId: {} on date: {}", settlement.getId(), settlementDate, e);
+            settlement.setStatus(SettlementStatus.FAILED);
+            settlementRepository.save(settlement);
+        }
+    }
+
+    public void resolveTransfer(UUID settlementId, String errorCode, String errorDescription){
+        Settlement settlement = settlementRepository.findById(settlementId).orElseThrow( () -> new ResourceNotFoundException("Settlement", settlementId));
+
+        if(settlement.getStatus() != SettlementStatus.TRANSFER_PENDING){
+            log.info("Settlement resolved, skipping for id: {}", settlement.getId());
+            return;
+        }
+
+        if(errorCode == null){  //success
+            settlement.setStatus(SettlementStatus.PROCESSED);
+            settlement.setProcessedAt(LocalDateTime.now());
+            settlementRepository.save(settlement);
+
+            log.info("Settlement processed successfully, settlementId: {}", settlement.getId());
+
+            outboxEventPublisher.publish(EventAggregateType.SETTLEMENT, settlementId,
+                    "SETTLEMENT_PROCESSED", Map.of(
+                            "settlementId", settlement.getMerchantId(),
+                            "status", settlement.getMerchantId(),
+                            "settlementAmount", settlement.getNetAmount().getAmountUnits(),
+                            "settlementCurrency", settlement.getNetAmount().getCurrency()
+
+                    ));
+        } else{ //failed
+            settlement.setStatus(SettlementStatus.FAILED);
+            settlement.setFailureReason(errorCode+" : "+errorDescription);
+            settlementRepository.save(settlement);
+
+            log.error("Settlement failed, settlementId: {}", settlement.getId());
+
+            outboxEventPublisher.publish(EventAggregateType.SETTLEMENT, settlementId,
+                    "SETTLEMENT_FAILED", Map.of(
+                            "settlementId", settlement.getMerchantId(),
+                            "status", settlement.getMerchantId(),
+                            "settlementAmount", settlement.getNetAmount().getAmountUnits(),
+                            "settlementCurrency", settlement.getNetAmount().getCurrency()
+
+                    ));
+        }
     }
 }

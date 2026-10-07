@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -20,6 +21,7 @@ import java.util.concurrent.Future;
 public class SettlementEngine {
 
     private final MerchantLookupService merchantLookupService;
+    private final SettlementTransactionExecutor settlementTransactionExecutor;
 
     @Scheduled(cron = "0 0 23 * * *")
     public void runScheduled(){
@@ -39,6 +41,7 @@ public class SettlementEngine {
             for(UUID merchantId : merchantIds){
                 futures.add(executorService.submit(() -> {
                     //call the settlement executor to process the settlement for this merchant
+                    settlementTransactionExecutor.processForMerchant(merchantId, LocalDate.now());
                 }));
             }
 

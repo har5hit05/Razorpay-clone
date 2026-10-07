@@ -8,7 +8,7 @@ import lombok.*;
 @Table(name = "settlement_payment")
 @Getter
 @Setter
-@RequiredArgsConstructor
+@NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class SettlementPayment {
@@ -19,5 +19,5 @@ public class SettlementPayment {
     @MapsId("settlementId")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "settlement_id", nullable = false)
-    private Settlement settlementId;
+    private Settlement settlement;
 }
